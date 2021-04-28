@@ -16,7 +16,7 @@ from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model
 from networks.resnet_big import SupConResNet
 from networks.wide_resnet import SupConWideResNet
-from losses import SupConLoss
+from multi_losses import MultiSupConLoss
 from datasets.dataset import SimpleDataset
 try:
     import apex
@@ -61,8 +61,8 @@ def parse_option():
     parser.add_argument('--size', type=int, default=224, help='parameter for RandomResizedCrop')
 
     # method
-    parser.add_argument('--method', type=str, default='SupCon',
-                        choices=['SupCon', 'SimCLR'], help='choose method')
+    parser.add_argument('--method', type=str, default='MultiSupCon',
+                        choices=['MultiSupCon'], help='choose method')
 
     # temperature
     parser.add_argument('--temp', type=float, default=0.07,
@@ -186,8 +186,8 @@ def set_loader(opt):
 
 
 def set_model(opt):
-    model = SupConWideResNet(name='wrn28_10', head='mlp', feat_dim=128)
-    criterion = SupConLoss(temperature=opt.temp)
+    model = SupConWideResNet(name='wrn28_10', head='mlp', feat_dim=256)
+    criterion = MultiSupConLoss(temperature=opt.temp)
 
     # enable synchronized Batch Normalization
     if opt.syncBN:
@@ -231,10 +231,8 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
         f1, f2 = torch.split(features, [bsz, bsz], dim=0)
         features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
         
-        if opt.method == 'SupCon':
+        if opt.method == 'MultiSupCon':
             loss = criterion(features, labels)
-        elif opt.method == 'SimCLR':
-            loss = criterion(features)
         else:
             raise ValueError('contrastive method not supported: {}'.
                              format(opt.method))
@@ -311,3 +309,5 @@ if __name__ == '__main__':
 
 
 # python main_supcon.py --dataset SD198-20 --data_folder /home/slidm/SkinLesionData/SD-198-20/base.json --batch_size 1024 --learning_rate 0.5 --temp 0.1 --cosine
+# CUDA_VISIBLE_DEVICES=1,2,3,4 python main_supcon.py --dataset SD198-20 --data_folder /home/slidm/SkinLesionData/SD-198-20/base.json --batch_size 32 --learning_rate 0.06 --temp 0.07 --cosine
+# CUDA_VISIBLE_DEVICES=2,3 python main_multi_supcon.py --dataset SD198-20 --data_folder /home/slidm/SkinLesionData/SD-198-20/base.json --batch_size 16 --learning_rate 0.06 --temp 0.07 --cosine --syncBN
